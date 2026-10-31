@@ -1,0 +1,231 @@
+[gd_scene format=3 uid="uid://hcm13tm8j3v5"]
+
+[ext_resource type="Script" uid="uid://cddg1xr5hye1d" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain.gd" id="1_mssda"]
+[ext_resource type="Script" uid="uid://dqeuj3gddfm65" path="res://addons/MarchingSquaresTerrain/editor/tools/scripts/marching_squares_texture_names.gd" id="2_sxiuf"]
+[ext_resource type="Texture2D" uid="uid://cxvnfgy865wsk" path="res://addons/MarchingSquaresTerrain/resources/plugin_materials/grass_leaf_sprite.png" id="3_yg6rb"]
+[ext_resource type="Script" uid="uid://c5yuywww81uee" path="res://addons/MarchingSquaresTerrain/editor/tools/scripts/marching_squares_texture_list.gd" id="4_6qj3o"]
+[ext_resource type="Texture2D" uid="uid://dbnc04k3n0sro" path="res://addons/MarchingSquaresTerrain/resources/plugin_materials/grass_terrain_noise.res" id="5_1hljp"]
+[ext_resource type="Texture2D" uid="uid://cv87twjgbqq0s" path="res://addons/MarchingSquaresTerrain/resources/plugin_materials/wall_noise_texture.res" id="6_h7mfa"]
+[ext_resource type="Script" uid="uid://mtlf02qfkqp5" path="res://addons/MarchingSquaresTerrain/editor/tools/scripts/marching_squares_quick_paint.gd" id="7_ragla"]
+[ext_resource type="Script" uid="uid://fvb3vi413siv" path="res://addons/MarchingSquaresTerrain/editor/tools/scripts/marching_squares_texture_preset.gd" id="8_qmojn"]
+[ext_resource type="Script" uid="uid://cql4d8s5t5xcx" path="res://addons/MarchingSquaresTerrain/algorithm/terrain/marching_squares_terrain_chunk.gd" id="9_yg6rb"]
+[ext_resource type="Script" uid="uid://22l7ysgniux3" path="res://addons/MarchingSquaresTerrain/algorithm/grass/marching_squares_grass_planter.gd" id="10_6qj3o"]
+
+[sub_resource type="GDScript" id="GDScript_scy3m"]
+script/source = "extends Node3D
+
+
+@onready var world_environment: WorldEnvironment = $SubViewportContainer/SubViewport/WorldEnvironment
+
+
+func _ready() -> void:
+	world_environment.environment.background_mode = Environment.BG_CLEAR_COLOR
+	RenderingServer.set_default_clear_color(Color.BLACK)
+"
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_e28qv"]
+sky_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
+ground_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
+
+[sub_resource type="Sky" id="Sky_or4gs"]
+sky_material = SubResource("ProceduralSkyMaterial_e28qv")
+
+[sub_resource type="Environment" id="Environment_xpbee"]
+background_mode = 2
+sky = SubResource("Sky_or4gs")
+ambient_light_source = 3
+tonemap_mode = 2
+glow_enabled = true
+
+[sub_resource type="GDScript" id="GDScript_tap1b"]
+script/source = "extends Node3D
+
+@export var move_speed: float = 8.0
+@export var fast_multiplier: float = 2.5
+@export var mouse_sensitivity: float = 0.005
+@export var key_rotate_speed: float = 90.0   # градусов/сек
+@export var vertical_speed: float = 6.0
+
+var _yaw: float = 0.0
+
+
+func _ready() -> void:
+	_yaw = rotation.y
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		_yaw -= event.relative.x * mouse_sensitivity
+		_apply_rotation()
+
+	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	elif event is InputEventMouseButton and event.pressed \\
+			and event.button_index == MOUSE_BUTTON_LEFT \\
+			and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+func _process(delta: float) -> void:
+	# --- Вращение с клавиатуры (Q/E — влево/вправо) ---
+	var yaw_input := 0.0
+	if Input.is_physical_key_pressed(KEY_Q):
+		yaw_input -= 1.0
+	if Input.is_physical_key_pressed(KEY_E):
+		yaw_input += 1.0
+
+	if yaw_input != 0.0:
+		_yaw -= deg_to_rad(key_rotate_speed) * yaw_input * delta
+		_apply_rotation()
+
+	# --- Перемещение (WASD) в плоскости XZ относительно yaw ---
+	var move := Vector3.ZERO
+	if Input.is_physical_key_pressed(KEY_W):
+		move -= transform.basis.z
+	if Input.is_physical_key_pressed(KEY_S):
+		move += transform.basis.z
+	if Input.is_physical_key_pressed(KEY_A):
+		move -= transform.basis.x
+	if Input.is_physical_key_pressed(KEY_D):
+		move += transform.basis.x
+
+	if move != Vector3.ZERO:
+		move.y = 0.0
+		move = move.normalized()
+		var speed := move_speed
+		if Input.is_physical_key_pressed(KEY_SHIFT):
+			speed *= fast_multiplier
+		global_position += move * speed * delta
+
+	# --- Вертикаль: Space вверх, Ctrl вниз ---
+	var vertical := 0.0
+	if Input.is_physical_key_pressed(KEY_SPACE):
+		vertical += 1.0
+	if Input.is_physical_key_pressed(KEY_CTRL):
+		vertical -= 1.0
+	if vertical != 0.0:
+		global_position.y += vertical * vertical_speed * delta
+
+
+func _apply_rotation() -> void:
+	rotation = Vector3(0.0, _yaw, 0.0)
+"
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_s62bs"]
+
+[sub_resource type="Texture2D" id="Texture2D_vynns"]
+resource_local_to_scene = false
+resource_name = ""
+
+[sub_resource type="Texture2D" id="Texture2D_p1dug"]
+resource_local_to_scene = false
+resource_name = ""
+
+[sub_resource type="Texture2D" id="Texture2D_38l2j"]
+resource_local_to_scene = false
+resource_name = ""
+
+[sub_resource type="Texture2D" id="Texture2D_ta716"]
+resource_local_to_scene = false
+resource_name = ""
+
+[sub_resource type="Texture2D" id="Texture2D_1nue7"]
+resource_local_to_scene = false
+resource_name = ""
+
+[sub_resource type="Texture2D" id="Texture2D_iuhot"]
+resource_local_to_scene = false
+resource_name = ""
+
+[sub_resource type="Texture2D" id="Texture2D_vk8tc"]
+resource_local_to_scene = false
+resource_name = ""
+
+[sub_resource type="Texture2D" id="Texture2D_11ep3"]
+resource_local_to_scene = false
+resource_name = ""
+
+[sub_resource type="Texture2D" id="Texture2D_fpfsv"]
+resource_local_to_scene = false
+resource_name = ""
+
+[sub_resource type="Resource" id="Resource_gcqhw"]
+script = ExtResource("2_sxiuf")
+metadata/_custom_type_script = "uid://dqeuj3gddfm65"
+
+[sub_resource type="Resource" id="Resource_87lyv"]
+script = ExtResource("4_6qj3o")
+terrain_textures = Array[Texture2D]([ExtResource("5_1hljp"), ExtResource("5_1hljp"), ExtResource("5_1hljp"), ExtResource("5_1hljp"), ExtResource("5_1hljp"), ExtResource("6_h7mfa"), SubResource("Texture2D_vynns"), SubResource("Texture2D_p1dug"), SubResource("Texture2D_38l2j"), SubResource("Texture2D_ta716"), SubResource("Texture2D_1nue7"), SubResource("Texture2D_iuhot"), SubResource("Texture2D_vk8tc"), SubResource("Texture2D_11ep3"), SubResource("Texture2D_fpfsv")])
+grass_colors = Array[Color]([Color(0.101960786, 0.6901961, 0.21176471, 1), Color(0.32156864, 0.48235294, 0.38431373, 1), Color(0.37254903, 0.42352942, 0.29411766, 1), Color(0.39215687, 0.4745098, 0.25490198, 1), Color(0.2901961, 0.49411765, 0.3647059, 1), Color(0.44313726, 0.44705883, 0.3647059, 1)])
+
+[sub_resource type="Resource" id="Resource_j2hbo"]
+script = ExtResource("8_qmojn")
+preset_name = "Empty Project"
+new_tex_names = SubResource("Resource_gcqhw")
+new_textures = SubResource("Resource_87lyv")
+
+[node name="DemoScene" type="Node3D" unique_id=1884493277]
+script = SubResource("GDScript_scy3m")
+
+[node name="SubViewportContainer" type="SubViewportContainer" parent="." unique_id=1526914094]
+texture_filter = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch = true
+stretch_shrink = 2
+
+[node name="SubViewport" type="SubViewport" parent="SubViewportContainer" unique_id=984976091]
+handle_input_locally = false
+size = Vector2i(576, 324)
+render_target_update_mode = 4
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="SubViewportContainer/SubViewport" unique_id=1766244256]
+environment = SubResource("Environment_xpbee")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="SubViewportContainer/SubViewport" unique_id=1721565852]
+transform = Transform3D(-0.033855144, 0.6042938, -0.7960419, 0.53061336, 0.6858396, 0.49806985, 0.8469377, -0.4055283, -0.34386548, 0, 20.11702, 0)
+shadow_enabled = true
+
+[node name="CameraPivot" type="Node3D" parent="SubViewportContainer/SubViewport" unique_id=1792096186]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 32, 0, 32)
+script = SubResource("GDScript_tap1b")
+
+[node name="Camera3D" type="Camera3D" parent="SubViewportContainer/SubViewport/CameraPivot" unique_id=1065357724]
+transform = Transform3D(0.70710677, 0.35355338, -0.6123724, 0, 0.8660254, 0.5, 0.70710677, -0.35355338, 0.6123724, -44.251278, 36.13102, 44.251278)
+projection = 1
+size = 55.0
+near = 0.003
+far = 131.11
+
+[node name="MarchingSquaresTerrain" type="Node3D" parent="SubViewportContainer/SubViewport" unique_id=506174241]
+script = ExtResource("1_mssda")
+data_directory = "res://scenes/mst_demo_scene_TerrainData/MarchingSquaresTerrain_45197e24"
+_storage_initialized = true
+blend_mode = 1
+noise_hmap = SubResource("FastNoiseLite_s62bs")
+grass_subdivisions = 4
+texture_7 = SubResource("Texture2D_vynns")
+texture_8 = SubResource("Texture2D_p1dug")
+texture_9 = SubResource("Texture2D_38l2j")
+texture_10 = SubResource("Texture2D_ta716")
+texture_11 = SubResource("Texture2D_1nue7")
+texture_12 = SubResource("Texture2D_iuhot")
+texture_13 = SubResource("Texture2D_vk8tc")
+texture_14 = SubResource("Texture2D_11ep3")
+texture_15 = SubResource("Texture2D_fpfsv")
+texture_albedo_1 = Color(0.101960786, 0.6901961, 0.21176471, 1)
+current_texture_preset = SubResource("Resource_j2hbo")
+default_wall_texture = 1
+metadata/_custom_type_script = "uid://cddg1xr5hye1d"
+
+[node name="Chunk (0, 0)" type="MeshInstance3D" parent="SubViewportContainer/SubViewport/MarchingSquaresTerrain" unique_id=27886779 node_paths=PackedStringArray("terrain_system")]
+script = ExtResource("9_yg6rb")
+terrain_system = NodePath("..")
+
+[node name="GrassPlanter" type="MultiMeshInstance3D" parent="SubViewportContainer/SubViewport/MarchingSquaresTerrain/Chunk (0, 0)" unique_id=1499301515]
+cast_shadow = 0
+script = ExtResource("10_6qj3o")
